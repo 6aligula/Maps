@@ -15,12 +15,12 @@ import Geolocation from '@react-native-community/geolocation';
 const App = () => {
   const [loading, setLoading] = useState(false); // Estado para el indicador de carga
 
+  // Función para solicitar permisos de ubicación
   const requestLocationPermission = async () => {
     try {
       setLoading(true); // Mostrar indicador de carga
 
-      // Solicitar permisos de ubicación en primer plano
-      const granted = await PermissionsAndroid.request(
+      const foregroundGranted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         {
           title: 'Permiso de Localización',
@@ -31,52 +31,69 @@ const App = () => {
         }
       );
 
-      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+      if (foregroundGranted === PermissionsAndroid.RESULTS.GRANTED) {
         if (Platform.OS === 'android' && Platform.Version >= 29) {
-          // Solicitar permiso de ubicación en segundo plano (Android 10+)
-          const backgroundGranted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
-            {
-              title: 'Permiso de Ubicación en Segundo Plano',
-              message: 'Esta aplicación necesita acceso a tu ubicación incluso en segundo plano.',
-              buttonNeutral: 'Preguntar después',
-              buttonNegative: 'Cancelar',
-              buttonPositive: 'Aceptar',
-            }
-          );
-
-          if (backgroundGranted !== PermissionsAndroid.RESULTS.GRANTED) {
+          const backgroundGranted = await requestBackgroundLocationPermission();
+          if (!backgroundGranted) {
             Alert.alert('Permiso Denegado', 'No se puede acceder a la ubicación en segundo plano.');
+            setLoading(false);
+            return;
           }
         }
-
-        // Obtener ubicación actual
-        Geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords;
-
-            // Abrir el mapa con la ubicación actual
-            openMap({
-              latitude,
-              longitude,
-              zoom: 15,
-            });
-            setLoading(false); // Ocultar indicador de carga
-          },
-          (error) => {
-            setLoading(false); // Ocultar indicador de carga
-            Alert.alert('Error', 'No se pudo obtener la ubicación: ' + error.message);
-          },
-          { enableHighAccuracy: true, timeout: 20000, maximumAge: 1000 }
-        );
+        getCurrentLocation(); // Obtener ubicación actual si los permisos fueron otorgados
       } else {
-        setLoading(false); // Ocultar indicador de carga
         Alert.alert('Permiso Denegado', 'No se puede acceder a la ubicación.');
+        setLoading(false);
       }
     } catch (err) {
-      setLoading(false); // Ocultar indicador de carga
+      setLoading(false);
       Alert.alert('Error', `Hubo un error al solicitar los permisos: ${err.message}`);
     }
+  };
+
+  // Función para solicitar permisos de ubicación en segundo plano (Android 10+)
+  const requestBackgroundLocationPermission = async () => {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
+        {
+          title: 'Permiso de Ubicación en Segundo Plano',
+          message: 'Esta aplicación necesita acceso a tu ubicación incluso en segundo plano.',
+          buttonNeutral: 'Preguntar después',
+          buttonNegative: 'Cancelar',
+          buttonPositive: 'Aceptar',
+        }
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      Alert.alert('Error', `Error al solicitar permisos de ubicación en segundo plano: ${err.message}`);
+      return false;
+    }
+  };
+
+  // Función para obtener la ubicación actual
+  const getCurrentLocation = () => {
+    Geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        openMapWithLocation(latitude, longitude);
+      },
+      (error) => {
+        Alert.alert('Error', 'No se pudo obtener la ubicación: ' + error.message);
+        setLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 1000 }
+    );
+  };
+
+  // Función para abrir el mapa con la ubicación actual
+  const openMapWithLocation = (latitude, longitude) => {
+    openMap({
+      latitude,
+      longitude,
+      zoom: 15,
+    });
+    setLoading(false);
   };
 
   return (

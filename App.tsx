@@ -1,114 +1,116 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   PermissionsAndroid,
   Platform,
   Alert,
-  Button,
   View,
   Text,
-  ActivityIndicator,
   StyleSheet,
+  Button,
+  NativeModules,
 } from 'react-native';
-import openMap from 'react-native-open-maps';
-import Geolocation from '@react-native-community/geolocation';
+import axios from 'axios';
+
+const { LocationModule } = NativeModules; // Módulo nativo de ubicación
 
 const App = () => {
-  const [loading, setLoading] = useState(false); // Estado para el indicador de carga
+  useEffect(() => {
+    requestLocationPermission();
+  }, []);
 
-  // Función para solicitar permisos de ubicación
+  // Solicitar permisos de ubicación
   const requestLocationPermission = async () => {
-    try {
-      setLoading(true); // Mostrar indicador de carga
-
-      const foregroundGranted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        {
-          title: 'Permiso de Localización',
-          message: 'Esta aplicación necesita acceso a tu ubicación para funcionar correctamente.',
-          buttonNeutral: 'Preguntar después',
-          buttonNegative: 'Cancelar',
-          buttonPositive: 'Aceptar',
-        }
-      );
-
-      if (foregroundGranted === PermissionsAndroid.RESULTS.GRANTED) {
-        if (Platform.OS === 'android' && Platform.Version >= 29) {
-          const backgroundGranted = await requestBackgroundLocationPermission();
-          if (!backgroundGranted) {
-            Alert.alert('Permiso Denegado', 'No se puede acceder a la ubicación en segundo plano.');
-            setLoading(false);
-            return;
-          }
-        }
-        getCurrentLocation(); // Obtener ubicación actual si los permisos fueron otorgados
-      } else {
-        Alert.alert('Permiso Denegado', 'No se puede acceder a la ubicación.');
-        setLoading(false);
+    const foregroundGranted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      {
+        title: 'Permiso de Localización',
+        message: 'Esta aplicación necesita acceso a tu ubicación para funcionar correctamente.',
+        buttonNeutral: 'Preguntar después',
+        buttonNegative: 'Cancelar',
+        buttonPositive: 'Aceptar',
       }
-    } catch (err) {
-      setLoading(false);
-      Alert.alert('Error', `Hubo un error al solicitar los permisos: ${err.message}`);
-    }
-  };
-
-  // Función para solicitar permisos de ubicación en segundo plano (Android 10+)
-  const requestBackgroundLocationPermission = async () => {
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
-        {
-          title: 'Permiso de Ubicación en Segundo Plano',
-          message: 'Esta aplicación necesita acceso a tu ubicación incluso en segundo plano.',
-          buttonNeutral: 'Preguntar después',
-          buttonNegative: 'Cancelar',
-          buttonPositive: 'Aceptar',
-        }
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } catch (err) {
-      Alert.alert('Error', `Error al solicitar permisos de ubicación en segundo plano: ${err.message}`);
-      return false;
-    }
-  };
-
-  // Función para obtener la ubicación actual
-  const getCurrentLocation = () => {
-    Geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        openMapWithLocation(latitude, longitude);
-      },
-      (error) => {
-        Alert.alert('Error', 'No se pudo obtener la ubicación: ' + error.message);
-        setLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 1000 }
     );
+
+    if (foregroundGranted === PermissionsAndroid.RESULTS.GRANTED) {
+      if (Platform.OS === 'android' && Platform.Version >= 29) {
+        const backgroundGranted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
+          {
+            title: 'Permiso de Ubicación en Segundo Plano',
+            message: 'Esta aplicación necesita acceso a tu ubicación incluso en segundo plano.',
+            buttonNeutral: 'Preguntar después',
+            buttonNegative: 'Cancelar',
+            buttonPositive: 'Aceptar',
+          }
+        );
+        if (backgroundGranted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert('Permiso Denegado', 'No se puede acceder a la ubicación en segundo plano.');
+        }
+      }
+    } else {
+      Alert.alert('Permiso Denegado', 'No se puede acceder a la ubicación.');
+    }
   };
 
-  // Función para abrir el mapa con la ubicación actual
-  const openMapWithLocation = (latitude, longitude) => {
-    openMap({
-      latitude,
-      longitude,
-      zoom: 15,
-    });
-    setLoading(false);
+  // Metodo para enviar la ubicación al servidor
+  const sendLocationToServer = async (latitude: any, longitude: any) => {
+    try {
+      const response = await axios.post('http://192.168.1.180:8000/api/geo/add/', {
+        name: 'Ubi de prueba',
+        coordinates: {
+          type: 'Point',
+          coordinates: [longitude, latitude],
+        },
+      });
+      console.log('Respuesta del servidor:', response.data);
+    } catch (error) {
+      console.error('Error al enviar la ubicación al servidor:', error);
+    }
   };
 
+  const startLocationService = () => {
+    try {
+      LocationModule.startLocationService(); // Llama al servicio nativo
+      console.log('Servicio de ubicación iniciado. Esperando envío de datos al servidor...');
+  
+      const checkLocationUpdates = setInterval(async () => {
+        try {
+          const location = await LocationModule.getLastSentLocation();
+          if (location) {
+            sendLocationToServer(location.latitude, location.longitude); 
+            console.log(`Datos enviados al servidor: Lat ${location.latitude}, Lng ${location.longitude}`);
+          } else {
+            console.log('No se ha enviado ninguna actualización de ubicación aún.');
+          }
+        } catch (error) {
+          console.error('Error al obtener la última ubicación:', error);
+        }
+      }, 10000); // Intervalo de verificación (10 segundos)
+      
+  
+      // Limpiar el intervalo al detener el servicio
+      return () => clearInterval(checkLocationUpdates);
+  
+    } catch (error) {
+      console.error('Error al iniciar el servicio de ubicación:', error);
+    }
+  };
+
+  const stopLocationService = () => {
+    try {
+      LocationModule.stopLocationService(); // Llama al servicio nativo
+      console.log('Servicio de ubicación detenido.');
+    } catch (error) {
+      console.error('Error al detener el servicio de ubicación:', error);
+    }
+  };
+  
+  
   return (
     <View style={styles.container}>
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0000ff" />
-          <Text style={styles.loadingText}>Obteniendo ubicación...</Text>
-        </View>
-      ) : (
-        <Button
-          title="Abrir Mapa con Mi Ubicación"
-          onPress={requestLocationPermission}
-        />
-      )}
+      <Text style={styles.text}>La aplicación está rastreando tu ubicación en segundo plano.</Text>
+      <Button title="Iniciar Rastreo" onPress={startLocationService} />
+      <Button title="Detener Rastreo" onPress={stopLocationService} />
     </View>
   );
 };
@@ -119,13 +121,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingContainer: {
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
+  text: {
+    fontSize: 18,
     color: '#333',
+    marginBottom: 20,
   },
 });
 

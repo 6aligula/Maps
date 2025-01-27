@@ -10,6 +10,7 @@ import {
   NativeModules,
 } from 'react-native';
 import axios from 'axios';
+import { Float } from 'react-native/Libraries/Types/CodegenTypes';
 
 const { LocationModule } = NativeModules; // Módulo nativo de ubicación
 
@@ -53,8 +54,9 @@ const App = () => {
   };
 
   // Metodo para enviar la ubicación al servidor
-  const sendLocationToServer = async (latitude: any, longitude: any) => {
+  const sendLocationToServer = async (latitude: Float, longitude: Float) => {
     try {
+      // objeto GeoJSON
       const response = await axios.post('http://192.168.1.180:8000/api/geo/add/', {
         name: 'Ubi de prueba',
         coordinates: {

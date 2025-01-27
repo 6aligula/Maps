@@ -15,9 +15,36 @@ import { Float } from 'react-native/Libraries/Types/CodegenTypes';
 const { LocationModule } = NativeModules; // Módulo nativo de ubicación
 
 const App = () => {
+  let checkLocationUpdates;
+
   useEffect(() => {
     requestLocationPermission();
+    requestNotificationPermission();
   }, []);
+
+  const requestNotificationPermission = async () => {
+    if (Platform.OS === 'android' && Platform.Version >= 33) {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        {
+          title: 'Permiso para Notificaciones',
+          message: 'Esta aplicación necesita permiso para mostrar notificaciones.',
+          buttonNeutral: 'Preguntar después',
+          buttonNegative: 'Cancelar',
+          buttonPositive: 'Aceptar',
+        }
+      );
+
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        console.log('Permiso para notificaciones concedido.');
+      } else {
+        Alert.alert(
+          'Permiso denegado',
+          'No se pueden mostrar notificaciones sin tu permiso.'
+        );
+      }
+    }
+  };
 
   // Solicitar permisos de ubicación
   const requestLocationPermission = async () => {
@@ -73,13 +100,13 @@ const App = () => {
   const startLocationService = () => {
     try {
       LocationModule.startLocationService(); // Llama al servicio nativo
-      console.log('Servicio de ubicación iniciado. Esperando envío de datos al servidor...');
+      console.log('Intentando iniciar el servicio de ubicación...');
   
-      const checkLocationUpdates = setInterval(async () => {
+      checkLocationUpdates = setInterval(async () => {
         try {
           const location = await LocationModule.getLastSentLocation();
           if (location) {
-            sendLocationToServer(location.latitude, location.longitude); 
+            sendLocationToServer(location.latitude, location.longitude);
             console.log(`Datos enviados al servidor: Lat ${location.latitude}, Lng ${location.longitude}`);
           } else {
             console.log('No se ha enviado ninguna actualización de ubicación aún.');
@@ -87,11 +114,7 @@ const App = () => {
         } catch (error) {
           console.error('Error al obtener la última ubicación:', error);
         }
-      }, 10000); // Intervalo de verificación (10 segundos)
-      
-  
-      // Limpiar el intervalo al detener el servicio
-      return () => clearInterval(checkLocationUpdates);
+      }, 5000); // Intervalo de verificación (5 segundos)
   
     } catch (error) {
       console.error('Error al iniciar el servicio de ubicación:', error);

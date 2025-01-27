@@ -7,6 +7,8 @@
     <!-- Permiso para acceder a la ubicación en segundo plano -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+        <!-- Permiso para notificaciones en Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
       android:usesCleartextTraffic="true"
@@ -29,11 +31,16 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
-    <service
-        android:name=".LocationService"
-        android:foregroundServiceType="location"
-        android:enabled="true"
-        android:exported="false" />
+      
+      <service
+          android:name=".LocationService"
+          android:foregroundServiceType="location"
+          android:enabled="true"
+          android:exported="false" />
+      
+      <activity android:name=".ConfirmationActivity"
+      android:theme="@style/Theme.AppCompat.Light.Dialog"
+      android:exported="true" />
 
     </application>
 </manifest>

@@ -19,7 +19,8 @@ export interface LocationModuleType {
      * @returns Una promesa que resuelve un objeto con `latitude` y `longitude`.
      */
     getLastSentLocation: () => Promise<{ latitude: number; longitude: number }>;
-  
+    
+    isLocationServiceRunning: () => Promise<boolean>; // Nuevo método
     /**
      * Agrega un listener para un tipo de evento específico.
      * @param eventType - El nombre del evento.

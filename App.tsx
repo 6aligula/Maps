@@ -47,7 +47,19 @@ const App: React.FC = () => {
       console.log('Permisos de notificación solicitados.');
     };
 
+        // Función para verificar el estado del servicio de ubicación
+    const checkLocationService = async () => {
+      try {
+        const serviceRunning = await LocationModule.isLocationServiceRunning();
+        console.log('Estado del servicio de ubicación:', serviceRunning);
+        setIsTracking(serviceRunning);
+      } catch (error) {
+        console.error('Error al verificar el estado del servicio de ubicación:', error);
+      }
+    };
+
     initializePermissions();
+    checkLocationService();
 
     // Suscribirse al evento TrackingStateChanged
     const trackingStateListener = locationEventEmitter.addListener(

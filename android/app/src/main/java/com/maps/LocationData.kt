@@ -1,5 +1,7 @@
 package com.maps
 
+import android.util.Log
+
 object LocationData {
     @Volatile
     var latestLatitude: Double? = null
@@ -19,6 +21,7 @@ object LocationData {
     fun updateLocation(latitude: Double, longitude: Double) {
         latestLatitude = latitude
         latestLongitude = longitude
+        Log.d("LocationData", "Ubicación actualizada: Lat=$latitude, Lng=$longitude")
         locationListener?.invoke(latitude, longitude)
     }
 

@@ -16,20 +16,23 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
 import com.maps.api.ApiClient
+import com.maps.utils.Constants
+import android.content.SharedPreferences
 
 class LocationService : Service() {
 
     companion object {
         const val ACTION_START_TRACKING = "com.maps.ACTION_START_TRACKING"
         const val ACTION_CANCEL_TRACKING = "com.maps.ACTION_CANCEL_TRACKING"
+        const val PREF_IS_TRACKING = "is_tracking" // Nueva constante para el estado de rastreo
     }
 
     private var isTracking = false // Nueva variable para controlar el estado
+    private lateinit var sharedPreferences: SharedPreferences // Nueva variable para almacenar el estado
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
-    private var lastKnownLocation: Location? =
-            null // Nueva variable para almacenar la última ubicación
+    private var lastKnownLocation: Location? = null // Nueva variable para almacenar la última ubicación
     private lateinit var apiClient: ApiClient // Añadir la variable apiClient
 
     override fun onCreate() {
@@ -38,6 +41,7 @@ class LocationService : Service() {
         initializeLocationCallback()
         // Inicializar ApiClient con la URL base de tu servidor
         apiClient = ApiClient("http://192.168.1.180:8000") // Cambia según corresponda
+        sharedPreferences = getSharedPreferences(Constants.SHARED_PREFS_NAME, MODE_PRIVATE)
     }
 
     private fun initializeLocationCallback() {
@@ -68,9 +72,11 @@ class LocationService : Service() {
             // Actualizar el Singleton con la nueva ubicación
             LocationData.updateLocation(location.latitude, location.longitude)
             // Opcional: enviar la ubicación al servidor
-            sendLocationToServer(location)
+            //sendLocationToServer(location)
             // Actualizar la notificación con la nueva ubicación
             updateNotification(location)
+            // Guardar la última ubicación en SharedPreferences
+            saveLastLocation(location.latitude, location.longitude)
         }
     }
 
@@ -114,6 +120,7 @@ class LocationService : Service() {
         super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         LocationData.setTrackingState(false) // Actualizar el estado de rastreo en el Singleton
+        saveTrackingState(false) // Guardar el estado de rastreo en SharedPreferences
         Log.d("LocationService", "Servicio destruido. Rastreo desactivado.")
     }
 
@@ -148,10 +155,12 @@ class LocationService : Service() {
                 .addOnSuccessListener {
                     Log.d("LocationService", "Actualizaciones de ubicación iniciadas.")
                     LocationData.setTrackingState(true) // Actualizar el estado de rastreo en el Singleton
+                    saveTrackingState(true) // Guardar el estado de rastreo en SharedPreferences
                 }
                 .addOnFailureListener {
                     Log.e("LocationService","Error al iniciar actualizaciones de ubicación: ${it.message}")
                     LocationData.setTrackingState(false) // Actualizar el estado de rastreo en el Singleton
+                    saveTrackingState(false) // Guardar el estado de rastreo en SharedPreferences
                 }
     }
 
@@ -160,6 +169,7 @@ class LocationService : Service() {
             .addOnSuccessListener {
                 Log.d("LocationService", "Actualizaciones de ubicación detenidas.")
                 LocationData.setTrackingState(false) // Actualizar el estado de rastreo en el Singleton
+                saveTrackingState(false) // Guardar el estado de rastreo en SharedPreferences
             }
             .addOnFailureListener {
                 Log.e("LocationService","Error al detener actualizaciones de ubicación: ${it.message}")
@@ -272,6 +282,19 @@ class LocationService : Service() {
     private fun removeNotification() {
         val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.cancel(notificationId)
+    }
+
+    private fun saveTrackingState(isTracking: Boolean) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_IS_TRACKING, isTracking).apply()
+        Log.d("LocationService", "Estado de rastreo guardado: $isTracking")
+    }
+
+    private fun saveLastLocation(latitude: Double, longitude: Double) {
+        sharedPreferences.edit()
+            .putFloat(Constants.PREF_LAST_LATITUDE, latitude.toFloat())
+            .putFloat(Constants.PREF_LAST_LONGITUDE, longitude.toFloat())
+            .apply()
+        Log.d("LocationService", "Última ubicación guardada: Lat $latitude, Lng $longitude")
     }
 
 }

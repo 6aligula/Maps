@@ -10,8 +10,12 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import android.content.SharedPreferences
+import com.maps.utils.Constants
 
 class LocationModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext), LifecycleEventListener {
+    
+    private lateinit var sharedPreferences: SharedPreferences
     private var latestLatitude: Double? = null
     private var latestLongitude: Double? = null
 
@@ -19,6 +23,7 @@ class LocationModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
         reactContext.addLifecycleEventListener(this)
         setupLocationListener()
         setupTrackingListener()
+        sharedPreferences = reactContext.getSharedPreferences(Constants.SHARED_PREFS_NAME, Context.MODE_PRIVATE)
     }
 
     override fun getName(): String {
@@ -99,10 +104,12 @@ class LocationModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
     @ReactMethod
     fun getLastSentLocation(promise: Promise) {
         Log.d("LocationModule", "Llamada a getLastSentLocation desde JavaScript.")
-        val latitude = LocationData.latestLatitude
-        val longitude = LocationData.latestLongitude
+        //val latitude = LocationData.latestLatitude
+        //val longitude = LocationData.latestLongitude
+        val latitude = sharedPreferences.getFloat(Constants.PREF_LAST_LATITUDE, 0f).toDouble()
+        val longitude = sharedPreferences.getFloat(Constants.PREF_LAST_LONGITUDE, 0f).toDouble()
 
-        if (latitude != null && longitude != null) {
+        if (latitude != 0.0 && longitude != 0.0) {
             Log.d("LocationModule", "Devolviendo ubicación: Lat: $latitude, Lng: $longitude")
             val locationMap = Arguments.createMap()
             locationMap.putDouble("latitude", latitude)
@@ -112,6 +119,12 @@ class LocationModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
             Log.d("LocationModule", "Ubicación no disponible.")
             promise.reject("LOCATION_ERROR", "No se encontró ubicación.")
         }
+    }
+
+    @ReactMethod
+    fun isLocationServiceRunning(promise: Promise) {
+        val isRunning = sharedPreferences.getBoolean(Constants.PREF_IS_TRACKING, false)
+        promise.resolve(isRunning)
     }
 
     private fun setupLocationListener() {

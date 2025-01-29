@@ -18,6 +18,10 @@ import android.app.PendingIntent
 
 class LocationService : Service() {
 
+    companion object {
+        const val ACTION_START_TRACKING = "ACTION_START_TRACKING"
+        const val ACTION_CANCEL_TRACKING = "ACTION_CANCEL_TRACKING"
+    }
     private var isTracking = false // Nueva variable para controlar el estado
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -54,28 +58,31 @@ class LocationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "START_TRACKING" -> {
+            ACTION_START_TRACKING -> {
                 if (!isTracking) {
                     isTracking = true
                     startLocationUpdates() // Comienza el rastreo
+                    updateNotificationWithTracking() // Actualiza la notificación para indicar que el rastreo está activo
                 } else {
                     Log.d("LocationService", "El rastreo ya está activo.")
                 }
             }
-            "STOP_TRACKING" -> {
+            ACTION_CANCEL_TRACKING -> {
                 isTracking = false
                 stopSelf() // Detiene el servicio
+                removeNotification() // Elimina la notificación
+                Log.d("LocationService", "Rastreo cancelado por el usuario.")
             }
             else -> {
                 if (!isTracking) {
-                    startForegroundService() // Muestra la notificación inicial
+                    startForegroundService() // Muestra la notificación inicial con botones de acción
                 } else {
                     Log.d("LocationService", "El rastreo ya está activo.")
                 }
             }
         }
         return START_STICKY
-    }
+    }    
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -132,24 +139,53 @@ class LocationService : Service() {
             getSystemService(NotificationManager::class.java)?.createNotificationChannel(notificationChannel)
         }
     
-        val confirmationIntent = Intent(this, ConfirmationActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        // Intent para confirmar el inicio del rastreo
+        val startIntent = Intent(this, LocationService::class.java).apply {
+            action = ACTION_START_TRACKING
         }
-        val confirmationPendingIntent = PendingIntent.getActivity(
-            this, 0, confirmationIntent, PendingIntent.FLAG_IMMUTABLE
+        val startPendingIntent = PendingIntent.getService(
+            this,
+            0,
+            startIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
     
+        // Intent para cancelar el rastreo
+        val cancelIntent = Intent(this, LocationService::class.java).apply {
+            action = ACTION_CANCEL_TRACKING
+        }
+        val cancelPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            cancelIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    
+        // Construir la notificación con acciones
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentTitle("Activar servicio de ubicación")
-            .setContentText("Pulsa para confirmar.")
+            .setContentText("¿Quieres activar el servicio de ubicación?")
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentIntent(confirmationPendingIntent)
-            .setAutoCancel(true)
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    0,
+                    "Sí",
+                    startPendingIntent
+                ).build()
+            )
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    0,
+                    "No",
+                    cancelPendingIntent
+                ).build()
+            )
+            .setOngoing(true) // Evita que la notificación se deslice
             .build()
     
         startForeground(notificationId, notification)
-    }    
+    }      
 
     private fun updateNotification(location: Location) {
         val channelId = "location_service_channel"
@@ -166,6 +202,25 @@ class LocationService : Service() {
     private fun sendLocationToServer(location: Location) {
         Log.d("LocationService", "Enviando ubicación al servidor: Lat: ${location.latitude}, Lng: ${location.longitude}")
         // Lógica de envío al backend con Retrofit, Volley o tu preferido.
-    } 
+    }
+
+    private fun updateNotificationWithTracking() {
+        val channelId = "location_service_channel"
+        val notification: Notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Ubicación activa")
+            .setContentText("El servicio de ubicación está rastreando tu posición.")
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setOngoing(true)
+            .build()
+    
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.notify(notificationId, notification)
+    }
+    
+    private fun removeNotification() {
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.cancel(notificationId)
+    }
+    
     
 }

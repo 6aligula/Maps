@@ -37,10 +37,6 @@
           android:foregroundServiceType="location"
           android:enabled="true"
           android:exported="false" />
-      
-      <activity android:name=".ConfirmationActivity"
-      android:theme="@style/Theme.AppCompat.Light.Dialog"
-      android:exported="true" />
 
     </application>
 </manifest>

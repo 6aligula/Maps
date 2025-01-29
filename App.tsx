@@ -1,145 +1,148 @@
-import React, { useEffect } from 'react';
+// src/App.tsx
+
+import React, { useEffect, useState } from 'react';
 import {
-  PermissionsAndroid,
-  Platform,
-  Alert,
   View,
   Text,
   StyleSheet,
   Button,
   NativeModules,
+  NativeEventEmitter,
 } from 'react-native';
-import axios from 'axios';
-import { Float } from 'react-native/Libraries/Types/CodegenTypes';
+import {
+  requestLocationPermission,
+  requestNotificationPermission,
+} from './services/permissions'; // Importa las funciones de permisos
 
-const { LocationModule } = NativeModules; // Módulo nativo de ubicación
+// Importar interfaces desde archivos separados
+import {
+  TrackingStateChangedEvent,
+  LocationUpdatedEvent,
+} from './types/events';
+import { LocationModuleType } from './types/locationModule';
 
-const App = () => {
-  let checkLocationUpdates;
+// Obtener el módulo nativo y tiparlo con la interfaz importada
+const LocationModule = NativeModules.LocationModule as LocationModuleType;
+
+// Crear una instancia tipada de NativeEventEmitter
+const locationEventEmitter = new NativeEventEmitter(LocationModule);
+
+const App: React.FC = () => {
+  // Estado para indicar si el rastreo está activo
+  const [isTracking, setIsTracking] = useState<boolean>(false);
+
+  // Estado para almacenar la ubicación actual
+  const [currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   useEffect(() => {
-    requestLocationPermission();
-    requestNotificationPermission();
-  }, []);
+    // Solicitar permisos al iniciar la aplicación
+    const initializePermissions = async () => {
+      console.log('Solicitando permisos de ubicación y notificación.');
+      await requestLocationPermission();
+      console.log('Permisos de ubicación solicitados.');
+      await requestNotificationPermission();
+      console.log('Permisos de notificación solicitados.');
+    };
 
-  const requestNotificationPermission = async () => {
-    if (Platform.OS === 'android' && Platform.Version >= 33) {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-        {
-          title: 'Permiso para Notificaciones',
-          message: 'Esta aplicación necesita permiso para mostrar notificaciones.',
-          buttonNeutral: 'Preguntar después',
-          buttonNegative: 'Cancelar',
-          buttonPositive: 'Aceptar',
-        }
-      );
+    initializePermissions();
 
-      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-        console.log('Permiso para notificaciones concedido.');
-      } else {
-        Alert.alert(
-          'Permiso denegado',
-          'No se pueden mostrar notificaciones sin tu permiso.'
-        );
-      }
-    }
-  };
-
-  // Solicitar permisos de ubicación
-  const requestLocationPermission = async () => {
-    const foregroundGranted = await PermissionsAndroid.request(
-      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      {
-        title: 'Permiso de Localización',
-        message: 'Esta aplicación necesita acceso a tu ubicación para funcionar correctamente.',
-        buttonNeutral: 'Preguntar después',
-        buttonNegative: 'Cancelar',
-        buttonPositive: 'Aceptar',
+    // Suscribirse al evento TrackingStateChanged
+    const trackingStateListener = locationEventEmitter.addListener(
+      'TrackingStateChanged',
+      (event: TrackingStateChangedEvent) => {
+        console.log('Evento TrackingStateChanged recibido:', event);
+        setIsTracking(event.isTracking);
       }
     );
 
-    if (foregroundGranted === PermissionsAndroid.RESULTS.GRANTED) {
-      if (Platform.OS === 'android' && Platform.Version >= 29) {
-        const backgroundGranted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
-          {
-            title: 'Permiso de Ubicación en Segundo Plano',
-            message: 'Esta aplicación necesita acceso a tu ubicación incluso en segundo plano.',
-            buttonNeutral: 'Preguntar después',
-            buttonNegative: 'Cancelar',
-            buttonPositive: 'Aceptar',
-          }
-        );
-        if (backgroundGranted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert('Permiso Denegado', 'No se puede acceder a la ubicación en segundo plano.');
-        }
+    // Suscribirse al evento LocationUpdated
+    const locationUpdateListener = locationEventEmitter.addListener(
+      'LocationUpdated',
+      (event: LocationUpdatedEvent) => {
+        console.log('Evento LocationUpdated recibido:', event);
+        setCurrentLocation({
+          latitude: event.latitude,
+          longitude: event.longitude,
+        });
       }
-    } else {
-      Alert.alert('Permiso Denegado', 'No se puede acceder a la ubicación.');
-    }
-  };
+    );
 
-  // Metodo para enviar la ubicación al servidor
-  const sendLocationToServer = async (latitude: Float, longitude: Float) => {
-    try {
-      // objeto GeoJSON
-      const response = await axios.post('http://192.168.1.180:8000/api/geo/add/', {
-        name: 'Ubi de prueba',
-        coordinates: {
-          type: 'Point',
-          coordinates: [longitude, latitude],
-        },
+    // Obtener la última ubicación enviada (si existe)
+    LocationModule.getLastSentLocation()
+      .then((location) => {
+        console.log('getLastSentLocation retornó:', location);
+        if (
+          location &&
+          location.latitude !== 0.0 &&
+          location.longitude !== 0.0
+        ) {
+          setCurrentLocation(location);
+        }
+      })
+      .catch((error) => {
+        console.error('Error al obtener la última ubicación:', error);
       });
-      console.log('Respuesta del servidor:', response.data);
-    } catch (error) {
-      console.error('Error al enviar la ubicación al servidor:', error);
-    }
-  };
 
+    // Limpiar las suscripciones al desmontar el componente
+    return () => {
+      trackingStateListener.remove();
+      locationUpdateListener.remove();
+      console.log('Listeners de eventos removidos.');
+    };
+  }, []);
+
+  // Función para iniciar el servicio de ubicación
   const startLocationService = () => {
     try {
-      LocationModule.startLocationService(); // Llama al servicio nativo
-      console.log('Intentando iniciar el servicio de ubicación...');
-  
-      checkLocationUpdates = setInterval(async () => {
-        try {
-          const location = await LocationModule.getLastSentLocation();
-          if (location) {
-            sendLocationToServer(location.latitude, location.longitude);
-            console.log(`Datos enviados al servidor: Lat ${location.latitude}, Lng ${location.longitude}`);
-          } else {
-            console.log('No se ha enviado ninguna actualización de ubicación aún.');
-          }
-        } catch (error) {
-          console.error('Error al obtener la última ubicación:', error);
-        }
-      }, 5000); // Intervalo de verificación (5 segundos)
-  
+      console.log('Invocando startLocationService en el módulo nativo.');
+      LocationModule.startLocationService();
+      console.log('startLocationService invocado.');
     } catch (error) {
       console.error('Error al iniciar el servicio de ubicación:', error);
     }
   };
 
+  // Función para detener el servicio de ubicación
   const stopLocationService = () => {
     try {
-      LocationModule.stopLocationService(); // Llama al servicio nativo
-      console.log('Servicio de ubicación detenido.');
+      console.log('Invocando stopLocationService en el módulo nativo.');
+      LocationModule.stopLocationService();
+      console.log('stopLocationService invocado.');
     } catch (error) {
       console.error('Error al detener el servicio de ubicación:', error);
     }
   };
-  
-  
+
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>La aplicación está rastreando tu ubicación en segundo plano.</Text>
-      <Button title="Iniciar Rastreo" onPress={startLocationService} />
-      <Button title="Detener Rastreo" onPress={stopLocationService} />
+      <Text style={styles.text}>
+        {isTracking
+          ? currentLocation
+            ? `Rastreando ubicación...\nLat: ${currentLocation.latitude}\nLng: ${currentLocation.longitude}`
+            : 'Rastreando ubicación...'
+          : 'El rastreo de ubicación está detenido.'}
+      </Text>
+      {!currentLocation && isTracking && (
+        <Text style={styles.loadingText}>Obteniendo ubicación...</Text>
+      )}
+      <Button
+        title="Iniciar Rastreo"
+        onPress={startLocationService}
+        disabled={isTracking} // Deshabilitar si ya está rastreando
+      />
+      <Button
+        title="Detener Rastreo"
+        onPress={stopLocationService}
+        disabled={!isTracking} // Deshabilitar si no está rastreando
+      />
     </View>
   );
 };
 
+// Definir los estilos
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -150,6 +153,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#333',
     marginBottom: 20,
+    textAlign: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#555',
+    marginTop: 10,
   },
 });
 

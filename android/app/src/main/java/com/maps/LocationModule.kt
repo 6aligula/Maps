@@ -170,7 +170,30 @@ class LocationModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
     // Métodos de LifecycleEventListener (opcional)
     override fun onHostResume() {
         Log.d("LocationModule", "onHostResume llamado.")
+        setupLocationListener()
+        setupTrackingListener()
+
+        // Emitir el estado actual del rastreo para sincronizar con la app
+        val isTracking = sharedPreferences.getBoolean(Constants.PREF_IS_TRACKING, false)
+        sendTrackingStateEvent(isTracking)  // <-- Asegura que JS recibe el estado actual
+
+        // Emitir la última ubicación si está disponible
+        val lastLatitude = sharedPreferences.getFloat(Constants.PREF_LAST_LATITUDE, 0f).toDouble()
+        val lastLongitude = sharedPreferences.getFloat(Constants.PREF_LAST_LONGITUDE, 0f).toDouble()
+
+        if (lastLatitude != 0.0 && lastLongitude != 0.0) {
+            sendLocationUpdateEvent(lastLatitude, lastLongitude) // <-- Forzar reenvío de ubicación
+        }
+
+        // Importante: Verificar si el servicio sigue corriendo y reiniciarlo si es necesario
+        if (isTracking) {
+            Log.d("LocationModule", "El servicio de ubicación debería estar activo, verificando...")
+            val context: Context = reactApplicationContext
+            val intent = Intent(context, LocationService::class.java)
+            context.startService(intent) // Reiniciar el servicio si es necesario
+        }
     }
+
     
     override fun onHostPause() {
         Log.d("LocationModule", "onHostPause llamado.")
@@ -178,7 +201,7 @@ class LocationModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
     
     override fun onHostDestroy() {
         Log.d("LocationModule", "onHostDestroy llamado. Eliminando listener de ubicación.")
-        LocationData.removeLocationListener()
+        //LocationData.removeLocationListener()
     }
     
 }

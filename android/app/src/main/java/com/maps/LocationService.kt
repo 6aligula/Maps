@@ -21,12 +21,6 @@ import android.content.SharedPreferences
 
 class LocationService : Service() {
 
-    companion object {
-        const val ACTION_START_TRACKING = "com.maps.ACTION_START_TRACKING"
-        const val ACTION_CANCEL_TRACKING = "com.maps.ACTION_CANCEL_TRACKING"
-        const val PREF_IS_TRACKING = "is_tracking" // Nueva constante para el estado de rastreo
-    }
-
     private var isTracking = false // Nueva variable para controlar el estado
     private lateinit var sharedPreferences: SharedPreferences // Nueva variable para almacenar el estado
 
@@ -82,7 +76,7 @@ class LocationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START_TRACKING -> {
+            Constants.ACTION_START_TRACKING -> {
                 if (!isTracking) {
                     isTracking = true
                     startLocationUpdates()
@@ -92,7 +86,7 @@ class LocationService : Service() {
                     Log.d("LocationService", "El rastreo ya está activo.")
                 }
             }
-            ACTION_CANCEL_TRACKING -> {
+            Constants.ACTION_CANCEL_TRACKING -> {
                 if (isTracking) {
                     isTracking = false
                     stopLocationUpdates()
@@ -191,7 +185,7 @@ class LocationService : Service() {
 
         // Intent para confirmar el inicio del rastreo
         val startIntent =
-                Intent(this, LocationService::class.java).apply { action = ACTION_START_TRACKING }
+                Intent(this, LocationService::class.java).apply { action = Constants.ACTION_START_TRACKING }
         val startPendingIntent =
                 PendingIntent.getService(
                         this,
@@ -202,7 +196,7 @@ class LocationService : Service() {
 
         // Intent para cancelar el rastreo
         val cancelIntent =
-                Intent(this, LocationService::class.java).apply { action = ACTION_CANCEL_TRACKING }
+                Intent(this, LocationService::class.java).apply { action = Constants.ACTION_CANCEL_TRACKING }
         val cancelPendingIntent =
                 PendingIntent.getService(
                         this,

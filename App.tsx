@@ -41,13 +41,26 @@ const App: React.FC = () => {
     // Solicitar permisos al iniciar la aplicación
     const initializePermissions = async () => {
       console.log('Solicitando permisos de ubicación y notificación.');
-      await requestLocationPermission();
-      console.log('Permisos de ubicación solicitados.');
-      await requestNotificationPermission();
-      console.log('Permisos de notificación solicitados.');
+      const locationGranted = await requestLocationPermission();
+      const notificationGranted = await requestNotificationPermission();
+      console.log('Permisos solicitados: Ubicación -', locationGranted, 'Notificaciones -', notificationGranted);
+
+      if (!locationGranted) {
+        Alert.alert(
+          'Permiso de Ubicación Denegado',
+          'La aplicación no funcionará correctamente sin el permiso de ubicación.'
+        );
+      }
+
+      if (!notificationGranted) {
+        Alert.alert(
+          'Permiso de Notificaciones Denegado',
+          'La aplicación no podrá mostrar notificaciones necesarias.'
+        );
+      }
     };
 
-        // Función para verificar el estado del servicio de ubicación
+    // Función para verificar el estado del servicio de ubicación
     const checkLocationService = async () => {
       try {
         const serviceRunning = await LocationModule.isLocationServiceRunning();
